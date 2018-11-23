@@ -16,10 +16,12 @@ set -e
 
 pushd . > /dev/null
 
+cd ./dist
+
 ###################################
 #      OpenSSL Version
 ###################################
-OPENSSL_VERSION="openssl-1.0.2l"
+OPENSSL_VERSION="openssl-1.0.2q"
 ###################################
 
 ###################################
@@ -55,7 +57,7 @@ buildMac()
    export CC="${BUILD_TOOLS}/usr/bin/clang -mmacosx-version-min=${MACOS_DEPLOYMENT_VERSION}"
 
    pushd . > /dev/null
-   cd "${OPENSSL_VERSION}"
+   cd "{OPENSSL_VERSION}"
    echo "Configure"
    ./Configure ${TARGET} --openssldir="/tmp/${OPENSSL_VERSION}-${ARCH}" &> "/tmp/${OPENSSL_VERSION}-${ARCH}.log"
    make >> "/tmp/${OPENSSL_VERSION}-${ARCH}.log" 2>&1
@@ -111,30 +113,38 @@ buildIOS()
    echo "Done Building ${OPENSSL_VERSION} for ${PLATFORM} ${IOS_SDK_VERSION} ${ARCH}"
 }
 
-echo "Cleaning up"
-rm -rf ${IOS_DIST_OUTPUT}/* ${MACOS_DIST_OUTPUT}/*
+cleanUp()
+{
+   echo "Cleaning up"
+   rm -rf ${IOS_DIST_OUTPUT}/* ${MACOS_DIST_OUTPUT}/*
 
-mkdir -p ${IOS_DIST_OUTPUT}/lib
-mkdir -p ${IOS_DIST_OUTPUT}/include/openssl/
+   mkdir -p ${IOS_DIST_OUTPUT}/lib
+   mkdir -p ${IOS_DIST_OUTPUT}/include/openssl/
 
-mkdir -p ${MACOS_DIST_OUTPUT}/lib
-mkdir -p ${MACOS_DIST_OUTPUT}/include/openssl/
+   mkdir -p ${MACOS_DIST_OUTPUT}/lib
+   mkdir -p ${MACOS_DIST_OUTPUT}/include/openssl/
 
-rm -rf "/tmp/${OPENSSL_VERSION}-*"
-rm -rf "/tmp/${OPENSSL_VERSION}-*.log"
+   rm -rf "/tmp/${OPENSSL_VERSION}-*"
+   rm -rf "/tmp/${OPENSSL_VERSION}-*.log"
 
-cd ./dist
-rm -rf "${OPENSSL_VERSION}"
+   rm -rf "${OPENSSL_VERSION}"
+}
 
-if [ ! -e ${OPENSSL_VERSION}.tar.gz ]; then
-   echo "Downloading ${OPENSSL_VERSION}.tar.gz"
-   curl -O https://www.openssl.org/source/${OPENSSL_VERSION}.tar.gz
-else
-   echo "Using ${OPENSSL_VERSION}.tar.gz"
-fi
+downloadAndUnpack()
+{
+   if [ ! -e ${OPENSSL_VERSION}.tar.gz ]; then
+      echo "Downloading ${OPENSSL_VERSION}.tar.gz"
+      curl -O https://www.openssl.org/source/${OPENSSL_VERSION}.tar.gz
+   else
+      echo "Using ${OPENSSL_VERSION}.tar.gz"
+   fi
 
-echo "Unpacking OpenSSL"
-tar xfz "./${OPENSSL_VERSION}.tar.gz"
+   echo "Unpacking OpenSSL"
+   tar xfz "./${OPENSSL_VERSION}.tar.gz"
+}
+
+cleanUp
+downloadAndUnpack
 
 echo "----------------------------------------"
 echo "OpenSSL version: ${OPENSSL_VERSION}"
@@ -146,6 +156,7 @@ echo " "
 buildMac "x86_64"
 
 echo "Copying macOS headers"
+echo "cp /tmp/${OPENSSL_VERSION}-x86_64/include/openssl/* ${MACOS_DIST_OUTPUT}/include/openssl/"
 cp /tmp/${OPENSSL_VERSION}-x86_64/include/openssl/* ${MACOS_DIST_OUTPUT}/include/openssl/
 
 echo "Copying macOS libraries"
@@ -162,26 +173,20 @@ echo "iOS deployment target: ${IOS_DEPLOYMENT_VERSION}"
 echo "----------------------------------------"
 echo " "
 
-buildIOS "armv7"
 buildIOS "arm64"
 buildIOS "x86_64"
-buildIOS "i386"
 
 echo "Copying iOS headers"
 cp /tmp/${IOS_DIST_OUTPUT}-arm64/include/openssl/* ${IOS_DIST_OUTPUT}/include/openssl/
 
 echo "Building iOS libraries"
 lipo \
-   "/tmp/${IOS_DIST_OUTPUT}-armv7/lib/libcrypto.a" \
    "/tmp/${IOS_DIST_OUTPUT}-arm64/lib/libcrypto.a" \
-   "/tmp/${IOS_DIST_OUTPUT}-i386/lib/libcrypto.a" \
    "/tmp/${IOS_DIST_OUTPUT}-x86_64/lib/libcrypto.a" \
    -create -output ${IOS_DIST_OUTPUT}/lib/libcrypto.a
 
 lipo \
-   "/tmp/${IOS_DIST_OUTPUT}-armv7/lib/libssl.a" \
    "/tmp/${IOS_DIST_OUTPUT}-arm64/lib/libssl.a" \
-   "/tmp/${IOS_DIST_OUTPUT}-i386/lib/libssl.a" \
    "/tmp/${IOS_DIST_OUTPUT}-x86_64/lib/libssl.a" \
    -create -output ${IOS_DIST_OUTPUT}/lib/libssl.a
 
